@@ -1,0 +1,41 @@
+# Changelog
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project doesn't have versioned releases yet — everything so far is
+`[Unreleased]`.
+
+## [Unreleased]
+
+### Added
+
+- SQLite store layer (`metric`/`event` tables, idempotent upserts).
+- Trend-adjusted lift analysis (`hirogari.analysis`): fits a log-linear
+  (falling back to linear) trend on the pre-event baseline and measures
+  lift against that extrapolated counterfactual rather than a flat
+  baseline mean, specifically to avoid attributing organic growth to
+  events. Classifies each event as `SUSTAINED` / `SPIKE` / `FLAT` /
+  `INSUFFICIENT`. Windows must be whole numbers of weeks (weekday-skew
+  protection); coverage is computed per whole week, not per raw day.
+- Data sources (`hirogari.sources`): PyPI downloads, npm downloads,
+  GitHub releases (-> events), GitHub stargazers (-> daily new-star
+  counts, requires `GITHUB_TOKEN` in practice — GitHub now 401s
+  unauthenticated requests to this endpoint), GitHub traffic
+  (views/clones, requires `GITHUB_TOKEN`). GitHub rate-limit handling
+  (`X-RateLimit-Remaining`/`-Reset`) with a clear error instead of a
+  stack trace.
+- CLI (`hirogari`): `collect`, `events`, `event add`, `lift`, `report`,
+  `study`, `list`. Table output by default; `--csv`/`--json` everywhere
+  that produces rows. Non-zero exit on collection failure.
+- `SPEC.md` (the living spec) and `notes/` (dated engineering log).
+
+### Fixed (pre-release, caught by tests before shipping)
+
+- `compute_lift` originally compared events to the flat pre-window mean,
+  which misattributes organic growth to every event on a growing project.
+  Replaced with the trend-counterfactual approach described above.
+- `cli.py`: `--db` given before the subcommand was silently overwritten
+  by the subcommand's own default (argparse subparser-dispatch footgun —
+  see `notes/2026-08-29-cli-bugs.md`).
+- `output.py`: `print_table`/`print_json` defaulted their `file` parameter
+  to `sys.stdout` evaluated at import time, so later stdout redirection
+  (tests, pipes) was invisible to them. Now resolved at call time.

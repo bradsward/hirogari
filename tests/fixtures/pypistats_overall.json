@@ -1,0 +1,11 @@
+{
+  "package": "acme-widget",
+  "type": "overall_downloads",
+  "data": [
+    {"category": "without_mirrors", "date": "2026-01-01", "downloads": 120},
+    {"category": "with_mirrors", "date": "2026-01-01", "downloads": 140},
+    {"category": "without_mirrors", "date": "2026-01-02", "downloads": 95},
+    {"category": "with_mirrors", "date": "2026-01-02", "downloads": 110},
+    {"category": "without_mirrors", "date": "2026-01-03", "downloads": 210}
+  ]
+}

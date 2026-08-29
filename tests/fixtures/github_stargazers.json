@@ -1,0 +1,5 @@
+[
+  {"starred_at": "2026-01-01T10:00:00Z", "user": {"login": "alice"}},
+  {"starred_at": "2026-01-01T14:00:00Z", "user": {"login": "bob"}},
+  {"starred_at": "2026-01-03T09:00:00Z", "user": {"login": "carol"}}
+]

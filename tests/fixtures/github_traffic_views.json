@@ -1,0 +1,8 @@
+{
+  "count": 128,
+  "uniques": 42,
+  "views": [
+    {"timestamp": "2026-02-01T00:00:00Z", "count": 50, "uniques": 20},
+    {"timestamp": "2026-02-02T00:00:00Z", "count": 78, "uniques": 22}
+  ]
+}
