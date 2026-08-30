@@ -8,6 +8,10 @@ The core entry points are two functions:
 * `lift` — a thin wrapper that pulls a series and the project's other
   events out of a `Store` and calls `compute_lift`. This is what the CLI
   calls.
+* `compute_diff_in_diff` / `diff_in_diff` — the same pair, one layer up:
+  nets the treatment project's trend-adjusted lift against what a set of
+  control projects (no event of their own in the same calendar window)
+  did over that identical window. See "Difference-in-differences" below.
 
 Trend adjustment (read this before touching thresholds)
 ---------------------------------------------------------
@@ -41,16 +45,30 @@ install traffic mechanically (CI pins bump, Dependabot fires, mirrors
 resync) with no human ever deciding to adopt anything. `release` events
 therefore measure something structurally different from `post`/`docs`
 events, which are closer to pure human signal. See notes/ for more.
+
+Difference-in-differences
+--------------------------
+The trend counterfactual nets out *that project's own* growth, but not an
+ecosystem-wide shock landing in the same calendar window (a holiday lull,
+a PyPI mirror outage, a Python release bumping everyone's downloads) --
+every project's actual value would deviate from its own trend together,
+and the treatment event would look like it caused something it didn't.
+`compute_diff_in_diff` runs the *same* trend-adjusted `compute_lift` on a
+set of control projects, anchored to the treatment's exact calendar
+dates rather than an event of their own (they should have none in that
+window -- that's what makes them controls), and subtracts the controls'
+average lift from the treatment's. A shared shock shows up in both and
+cancels; an effect specific to the treatment event doesn't.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import StrEnum
-from statistics import median
+from statistics import mean, median
 from typing import Any
 
 # MAD -> stdev-equivalent scale factor for a normal distribution. Standard
@@ -197,6 +215,22 @@ def _ols(pairs: list[tuple[float, float]]) -> tuple[float, float]:
     return slope, intercept
 
 
+def _weekly_means(points: list[tuple[int, float]]) -> list[tuple[float, float]]:
+    """Group daily (offset, value) points into complete-week chunks (7 in
+    a row, guaranteed by how `_complete_week_points` builds its output —
+    it always appends whole 7-day blocks in order) and average each into
+    one (mean_offset, mean_value) point.
+
+    This is what `_fit_and_predict` fits the trend *on*, instead of the
+    raw daily points -- see its docstring for why.
+    """
+    weeks = [points[i : i + 7] for i in range(0, len(points), 7)]
+    return [
+        (sum(t for t, _ in week) / len(week), sum(y for _, y in week) / len(week))
+        for week in weeks
+    ]
+
+
 def _fit_and_predict(
     baseline_points: list[tuple[int, float]], offsets_to_predict: list[int]
 ) -> tuple[dict[int, float], float | None, str, list[float]]:
@@ -208,12 +242,29 @@ def _fit_and_predict(
     has non-positive values (log undefined) or the log-linear
     extrapolation overflows float range.
 
+    The slope/intercept are fit on *weekly-aggregated* points
+    (`_weekly_means`), not the individual daily points. Downloads swing
+    as much as ~40% between weekdays and weekends; over a short baseline
+    (2-4 weeks) that's easily enough noise to dominate a daily-point
+    regression and produce a spurious slope purely from incidental
+    variation in how deep each week's weekend dip happened to be — and
+    because every project shares the same calendar, that noise is
+    *correlated across unrelated projects*, which can look exactly like
+    a shared ecosystem trend and isn't one. Confirmed on real data: see
+    notes/2026-08-30-weekly-trend-fit.md for four unrelated real projects
+    that all showed a suspiciously similar ~-2%/day "trend" from the same
+    two real calendar weekends before this fix. Residuals (for the
+    z-score) are still evaluated per individual day against the
+    resulting trend line, keeping the larger daily sample for that MAD
+    estimate — only the slope-fitting input changes.
+
     Returns (predicted_by_offset, trend_pct_per_day, model_name, baseline_residuals).
     """
     values = [y for _, y in baseline_points]
+    weekly = _weekly_means(baseline_points)
     if all(y > 0 for y in values):
         try:
-            slope, intercept = _ols([(float(t), math.log(y)) for t, y in baseline_points])
+            slope, intercept = _ols([(t, math.log(y)) for t, y in weekly])
             predicted = {t: math.exp(intercept + slope * t) for t in offsets_to_predict}
             residuals = [y - math.exp(intercept + slope * t) for t, y in baseline_points]
             log_linear_pct_per_day: float | None = math.exp(slope) - 1.0
@@ -221,7 +272,7 @@ def _fit_and_predict(
         except OverflowError:
             pass  # extrapolation range too wide/steep for exp() -- fall back to linear
 
-    slope, intercept = _ols([(float(t), y) for t, y in baseline_points])
+    slope, intercept = _ols([(t, y) for t, y in weekly])
     predicted = {t: intercept + slope * t for t in offsets_to_predict}
     residuals = [y - (intercept + slope * t) for t, y in baseline_points]
     baseline_mean = sum(values) / len(values)
@@ -480,5 +531,185 @@ def lift(
         sustain_start=sustain_start,
         sustain_end=sustain_end,
         other_event_dates=other_event_dates,
+        metric_name=metric,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DiDResult:
+    treatment: LiftResult
+    """The treatment project's own trend-adjusted `compute_lift` result —
+    everything from before is still here and unchanged."""
+    control_projects_used: list[str]
+    """Controls whose reading over this exact calendar window was usable
+    (not INSUFFICIENT, not itself confounded by one of its own events)."""
+    control_projects_skipped: list[str]
+    """Controls excluded — either their own data was INSUFFICIENT for
+    this window, or they had an event of their own inside it (so they
+    aren't actually "no event in the same window" and can't serve as a
+    control for it)."""
+    control_immediate_lift_pct: float | None
+    """Mean of the usable controls' own immediate_lift_pct over the
+    treatment's exact calendar window — the ecosystem-wide movement to
+    net out."""
+    control_sustained_lift_pct: float | None
+    did_immediate_lift_pct: float | None
+    """treatment.immediate_lift_pct - control_immediate_lift_pct. None
+    whenever either side is None (treatment itself insufficient/zero-
+    baseline, or no usable controls)."""
+    did_sustained_lift_pct: float | None
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        d = self.treatment.to_dict()
+        d.update(
+            {
+                "control_projects_used": ";".join(self.control_projects_used),
+                "control_projects_skipped": ";".join(self.control_projects_skipped),
+                "control_immediate_lift_pct": self.control_immediate_lift_pct,
+                "control_sustained_lift_pct": self.control_sustained_lift_pct,
+                "did_immediate_lift_pct": self.did_immediate_lift_pct,
+                "did_sustained_lift_pct": self.did_sustained_lift_pct,
+                "did_notes": "; ".join(self.notes),
+            }
+        )
+        return d
+
+
+def compute_diff_in_diff(
+    treatment_series: dict[date, float],
+    control_series_by_project: dict[str, dict[date, float]],
+    event_date: date,
+    *,
+    pre: int = 14,
+    post: int = 14,
+    sustain_start: int = 15,
+    sustain_end: int = 42,
+    other_event_dates: Iterable[date] = (),
+    control_events_by_project: Mapping[str, Iterable[date]] | None = None,
+    metric_name: str = "",
+) -> DiDResult:
+    """Pure computation, same spirit as `compute_lift`: everything needed
+    is passed in as plain series/dates, no I/O. Runs `compute_lift` once
+    for the treatment and once per control project, all anchored to the
+    same `event_date`/window sizes, then nets the treatment's lift
+    against the controls' average.
+
+    `control_events_by_project[project]` should be that control's *own*
+    full event list (all of it — there's no "self" event to exclude,
+    unlike the treatment). Any control with an event inside its own
+    [baseline_start, sustained_end] window is excluded, since a project
+    with an event in the window isn't a valid "no event happened here"
+    control for it.
+    """
+    treatment = compute_lift(
+        treatment_series,
+        event_date,
+        pre=pre,
+        post=post,
+        sustain_start=sustain_start,
+        sustain_end=sustain_end,
+        other_event_dates=other_event_dates,
+        metric_name=metric_name,
+    )
+
+    control_events = control_events_by_project or {}
+    used: list[str] = []
+    skipped: list[str] = []
+    immediate_pcts: list[float] = []
+    sustained_pcts: list[float] = []
+
+    for project, series in control_series_by_project.items():
+        control_result = compute_lift(
+            series,
+            event_date,
+            pre=pre,
+            post=post,
+            sustain_start=sustain_start,
+            sustain_end=sustain_end,
+            other_event_dates=control_events.get(project, ()),
+            metric_name=metric_name,
+        )
+        is_insufficient = control_result.classification is Classification.INSUFFICIENT
+        if is_insufficient or control_result.confounded:
+            skipped.append(project)
+            continue
+        used.append(project)
+        if control_result.immediate_lift_pct is not None:
+            immediate_pcts.append(control_result.immediate_lift_pct)
+        if control_result.sustained_lift_pct is not None:
+            sustained_pcts.append(control_result.sustained_lift_pct)
+
+    control_immediate = mean(immediate_pcts) if immediate_pcts else None
+    control_sustained = mean(sustained_pcts) if sustained_pcts else None
+
+    did_immediate = (
+        treatment.immediate_lift_pct - control_immediate
+        if treatment.immediate_lift_pct is not None and control_immediate is not None
+        else None
+    )
+    did_sustained = (
+        treatment.sustained_lift_pct - control_sustained
+        if treatment.sustained_lift_pct is not None and control_sustained is not None
+        else None
+    )
+
+    notes: list[str] = []
+    if not used:
+        notes.append("no usable control projects for this window (all insufficient or confounded)")
+
+    return DiDResult(
+        treatment=treatment,
+        control_projects_used=used,
+        control_projects_skipped=skipped,
+        control_immediate_lift_pct=control_immediate,
+        control_sustained_lift_pct=control_sustained,
+        did_immediate_lift_pct=did_immediate,
+        did_sustained_lift_pct=did_sustained,
+        notes=notes,
+    )
+
+
+def diff_in_diff(
+    store: Any,
+    project: str,
+    metric: str,
+    event_date: date,
+    control_projects: list[str],
+    *,
+    pre: int = 14,
+    post: int = 14,
+    sustain_start: int = 15,
+    sustain_end: int = 42,
+) -> DiDResult:
+    """Store-backed convenience wrapper around `compute_diff_in_diff`,
+    the same relationship `lift` has to `compute_lift`. `control_projects`
+    is the candidate pool — not every candidate necessarily ends up
+    "used" (see `DiDResult.control_projects_skipped`)."""
+    source, _, name = metric.partition(".")
+    if not name:
+        raise ValueError(f"metric must be 'source.name' (e.g. 'pypi.downloads'), got {metric!r}")
+
+    treatment_series = store.get_metric_series(project, source, name)
+    other_event_dates = [e.date for e in store.get_events(project) if e.date != event_date]
+
+    control_series_by_project: dict[str, dict[date, float]] = {}
+    control_events_by_project: dict[str, list[date]] = {}
+    for control in control_projects:
+        if control == project:
+            continue
+        control_series_by_project[control] = store.get_metric_series(control, source, name)
+        control_events_by_project[control] = [e.date for e in store.get_events(control)]
+
+    return compute_diff_in_diff(
+        treatment_series,
+        control_series_by_project,
+        event_date,
+        pre=pre,
+        post=post,
+        sustain_start=sustain_start,
+        sustain_end=sustain_end,
+        other_event_dates=other_event_dates,
+        control_events_by_project=control_events_by_project,
         metric_name=metric,
     )

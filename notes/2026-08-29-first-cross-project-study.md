@@ -36,16 +36,23 @@ the code expects) and covered the logic with fixture tests, but haven't
 re-run the actual `certifi`/`cryptography` fallback live end-to-end,
 since this environment has no `GITHUB_TOKEN` available.
 
-## The study actually found real signal, not just null results
+## The study actually found real signal, not just null results (revised next day)
 
 Going in, I expected (based on the single-project validation run) that a
 real study would be dominated by INSUFFICIENT and FLAT with maybe nothing
-else — and 95% INSUFFICIENT / 4% FLAT held. But there were also **2 real
-SUSTAINED results** (out of 787 rows), and one of them
-(`pytest-dev/pytest` 9.0.3) is clean: not confounded, `robust_z` 3.06,
-sustained lift 133.6%. That's not a fluke of loose thresholds — it's the
-same 0.10/2.0/0.80/whole-week thresholds that produced FLAT on everything
-else in this run, including rows with a bigger raw `immediate_lift_pct`
-that didn't clear `robust_z`. Worth keeping as a concrete existence proof
-that the methodology can and does distinguish a specific real event from
-noise, not just a filter that outputs INSUFFICIENT/FLAT forever.
+else — and 95% INSUFFICIENT / ~5% FLAT held. There were also **2 real
+SUSTAINED results** (out of 787 rows) at the time this note was
+originally written, and one of them (`pytest-dev/pytest` 9.0.3) looked
+clean: not confounded, `robust_z` 3.06, sustained lift 133.6%.
+
+**Revised 2026-08-30, don't trust the numbers above:** a real `--did` run
+pointed at exactly that "clean" finding surfaced a bug in the trend fit
+itself (contaminated by weekday/weekend noise — see
+`2026-08-30-weekly-trend-fit.md`). After fixing it and re-running, only
+1 of the 2 SUSTAINED findings survived, and DiD then showed *that one*
+wasn't project-specific either — three real control projects moved
+almost as much over the same calendar window with no release of their
+own. Net: zero of 787 rows represent a DiD-confirmed, project-specific
+lift. `study/FINDINGS.md` has the corrected, current numbers; this note
+is left as-is (rather than rewritten) as a record of what the reasoning
+looked like before the DiD feature existed to check it.

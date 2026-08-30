@@ -11,7 +11,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from hirogari.analysis import lift
+from hirogari.analysis import diff_in_diff, lift
 from hirogari.output import emit
 from hirogari.sources import github_releases, github_stars, github_traffic, npm, pypi
 from hirogari.sources.base import SourceError
@@ -112,6 +112,20 @@ def cmd_event_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def _control_pool(store: Store, project: str, metric: str) -> list[str]:
+    """Every other project in the local db that has this exact metric —
+    the default DiD control pool. No cadence/relevance filtering: an
+    unusable control (insufficient data, its own event in-window) is
+    excluded per-event by `diff_in_diff` itself, not here."""
+    source, _, name = metric.partition(".")
+    return [
+        candidate
+        for candidate in store.list_projects()
+        if candidate != project
+        and any(s == source and n == name for s, n, *_rest in store.list_metrics(candidate))
+    ]
+
+
 def cmd_lift(args: argparse.Namespace) -> int:
     store = Store(args.db)
     events = store.get_events(args.project)
@@ -122,19 +136,44 @@ def cmd_lift(args: argparse.Namespace) -> int:
         )
         return 1
 
+    control_projects: list[str] = []
+    if args.did:
+        control_projects = _control_pool(store, args.project, args.metric)
+        if not control_projects:
+            print(
+                f"warning: --did requested but no other project in the db has metric "
+                f"{args.metric!r} -- every row's control fields will be empty",
+                file=sys.stderr,
+            )
+
     rows: list[dict[str, Any]] = []
     for event in events:
-        result = lift(
-            store,
-            args.project,
-            args.metric,
-            event.date,
-            pre=args.pre,
-            post=args.post,
-            sustain_start=args.sustain_start,
-            sustain_end=args.sustain_end,
-        )
-        rows.append({"event_kind": event.kind, "event_label": event.label, **result.to_dict()})
+        if args.did:
+            did_result = diff_in_diff(
+                store,
+                args.project,
+                args.metric,
+                event.date,
+                control_projects,
+                pre=args.pre,
+                post=args.post,
+                sustain_start=args.sustain_start,
+                sustain_end=args.sustain_end,
+            )
+            row_data = did_result.to_dict()
+        else:
+            lift_result = lift(
+                store,
+                args.project,
+                args.metric,
+                event.date,
+                pre=args.pre,
+                post=args.post,
+                sustain_start=args.sustain_start,
+                sustain_end=args.sustain_end,
+            )
+            row_data = lift_result.to_dict()
+        rows.append({"event_kind": event.kind, "event_label": event.label, **row_data})
     store.close()
     emit(rows, csv_path=args.csv, as_json=args.json)
     return 0
@@ -171,9 +210,13 @@ def cmd_study(args: argparse.Namespace) -> int:
 
     token = os.environ.get("GITHUB_TOKEN")
     store = Store(args.db)
-    all_rows: list[dict[str, Any]] = []
     any_failure = False
+    projects: list[str] = []
 
+    # Phase 1: collect everything for every project first. --did needs
+    # every OTHER project's data available as a potential control when
+    # analyzing any one project's events, so analysis can't start until
+    # the whole pool has been collected.
     for raw_line in lines:
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -181,6 +224,7 @@ def cmd_study(args: argparse.Namespace) -> int:
         parts = [p.strip() for p in line.split(",")]
         project = parts[0]
         pypi_package = parts[1] if len(parts) > 1 and parts[1] else None
+        projects.append(project)
 
         print(f"== {project} ==")
         # functools.partial binds `project`/`pypi_package` immediately as
@@ -208,18 +252,32 @@ def cmd_study(args: argparse.Namespace) -> int:
         if not ok:
             any_failure = True
 
+    # Phase 2: analyze. Every project's own events, against every metric
+    # it has, with every other studied project available as a --did
+    # control candidate (diff_in_diff itself excludes any that turn out
+    # confounded or insufficient for a given event's specific window).
+    all_rows: list[dict[str, Any]] = []
+    for project in projects:
         events = store.get_events(project, kind="release")
         metrics = store.list_metrics(project)
         for source, name, *_rest in metrics:
             metric_id = f"{source}.{name}"
             for event in events:
-                result = lift(store, project, metric_id, event.date)
+                if args.did:
+                    control_projects = [p for p in projects if p != project]
+                    did_result = diff_in_diff(
+                        store, project, metric_id, event.date, control_projects
+                    )
+                    row_data = did_result.to_dict()
+                else:
+                    lift_result = lift(store, project, metric_id, event.date)
+                    row_data = lift_result.to_dict()
                 all_rows.append(
                     {
                         "project": project,
                         "event_kind": event.kind,
                         "event_label": event.label,
-                        **result.to_dict(),
+                        **row_data,
                     }
                 )
 
@@ -301,6 +359,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_lift.add_argument("--post", type=int, default=14)
     p_lift.add_argument("--sustain-start", type=int, default=15, dest="sustain_start")
     p_lift.add_argument("--sustain-end", type=int, default=42, dest="sustain_end")
+    p_lift.add_argument(
+        "--did",
+        action="store_true",
+        help=(
+            "also net the lift against every other project in the db sharing this "
+            "metric, as difference-in-differences controls (see SPEC.md)"
+        ),
+    )
     p_lift.add_argument("--csv", help="write results to this path instead of printing a table")
     p_lift.add_argument("--json", action="store_true", help="print results as JSON, not a table")
     p_lift.set_defaults(func=cmd_lift)
@@ -315,6 +381,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_study = sub.add_parser("study", help="collect + compute lift across many projects at once")
     p_study.add_argument("projects_file", help="newline-delimited 'owner/repo[,pypi_package]' file")
+    p_study.add_argument(
+        "--did",
+        action="store_true",
+        help="net each project's lift against every other project in this study as a control",
+    )
     p_study.add_argument("--csv")
     p_study.add_argument("--json", action="store_true")
     p_study.set_defaults(func=cmd_study)

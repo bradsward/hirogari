@@ -130,6 +130,34 @@ def test_real_lift_on_top_of_growth_trend_is_still_detected() -> None:
     assert result.sustained_lift_pct is not None and result.sustained_lift_pct > 0.4
 
 
+def test_trend_fit_ignores_compositional_weekday_noise_with_flat_weekly_means() -> None:
+    """Real bug, found via a real DiD run on real data (see
+    notes/2026-08-30-weekly-trend-fit.md): fitting the trend on individual
+    daily points is vulnerable to a realistic noise shape where the
+    weekend dip gets deeper (and weekdays correspondingly higher) closer
+    to the event, even though every week's own mean is exactly flat. A
+    daily-point regression is dominated by the larger weekday
+    subpopulation's drift and reads a spurious trend; fitting on
+    weekly-aggregated means (the fix) should not be fooled by this.
+    """
+    series: dict[date, float] = {}
+    depths = {1: 30.0, 2: 50.0, 3: 70.0, 4: 90.0}  # weekend value, deepening toward the event
+    for week in range(1, 5):
+        weekend_value = depths[week]
+        weekday_value = (700.0 - 2 * weekend_value) / 5.0  # keeps this week's mean at exactly 100
+        for day_in_week in range(7):
+            i = (week - 1) * 7 + day_in_week + 1
+            d = EVENT - timedelta(days=i)
+            series[d] = weekend_value if d.weekday() >= 5 else weekday_value
+    series.update({EVENT + timedelta(days=i): 100.0 for i in range(50)})  # genuinely flat after
+
+    result = compute_lift(series, EVENT, pre=28, post=14, sustain_start=15, sustain_end=42)
+
+    assert result.trend_pct_per_day is not None
+    assert abs(result.trend_pct_per_day) < 0.003  # near zero, not a double-digit-per-week "trend"
+    assert result.classification is Classification.FLAT
+
+
 # ---------------------------------------------------------------------------
 # 4. Gaps: too few complete weeks present in pre/post windows -> INSUFFICIENT
 # ---------------------------------------------------------------------------

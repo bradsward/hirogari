@@ -173,7 +173,41 @@ numbers `hirogari` still reports; the actual lift percentages and
 `robust_z` are computed against a trend-extrapolated counterfactual, not
 the flat baseline mean. `THRESHOLDS["min_window_coverage"]` was raised
 from an initial 0.60 to 0.80, and windows are further required to be
-whole numbers of weeks to avoid weekday-skewed gaps.
+whole numbers of weeks to avoid weekday-skewed gaps. The trend fit itself
+was later found to be vulnerable to weekday/weekend noise when fit on raw
+daily points (see "Difference-in-differences" below and
+`notes/2026-08-30-weekly-trend-fit.md`) and now fits on weekly-aggregated
+points instead.
+
+### Difference-in-differences
+
+Originally scoped as future work ("worth doing eventually... nets out
+ecosystem-wide effects like holidays and PyPI outages"), built the same
+day the trend-fit bug above was found — by using it for real:
+
+```
+compute_diff_in_diff(treatment_series, control_series_by_project, event_date, ...)
+diff_in_diff(store, project, metric, event_date, control_projects, ...)
+```
+
+Runs `compute_lift` once for the treatment event and once per candidate
+control project, all anchored to the *same* `event_date` and window
+sizes. A control is only used if it has no event of its own inside its
+own window for that period and has enough data to be non-INSUFFICIENT.
+`did_immediate_lift_pct`/`did_sustained_lift_pct` = the treatment's own
+lift minus the mean of the usable controls' lift over that identical
+calendar window. `classification` is never recomputed from the DiD
+numbers — it's still exactly what the treatment's own `compute_lift`
+says; DiD is reported alongside as an additional check, not a
+replacement verdict.
+
+CLI: `--did` on `hirogari lift` (controls = every other project in the
+local db sharing the metric) and `hirogari study` (controls = every
+other project in that study's list). Real result on the first run: the
+cross-project study's one SUSTAINED finding, which cleared both
+thresholds on its own, dropped to a negligible DiD-adjusted lift once
+checked against three real no-event controls over the same calendar
+window — see `study/FINDINGS.md`.
 
 ## CLI
 
@@ -191,6 +225,9 @@ hirogari list                                            # what's in the local d
 of `owner/repo[,pypi_package]` lines, collects everything, computes lift
 for every release, and writes one tidy CSV row per event. That CSV is the
 input to a cross-project analysis, which is the actual point of the tool.
+
+**Added during implementation:** `--did` on both `lift` and `study` —
+see "Difference-in-differences" above.
 
 Default output is a readable text table. `--csv` and `--json` everywhere
 for machine consumption. Exit non-zero on collection failure so it can

@@ -44,7 +44,12 @@ since 2018, several per month). Findings:
   One spot-checked row had a 24% immediate_lift_pct that still read FLAT
   because robust_z was only ~1.0 — exactly the AND-not-OR gate in
   `_is_meaningful` doing its job on real, noisy, high-volume data (a
-  pct-only threshold would have false-positived this).
+  pct-only threshold would have false-positived this). (2026-08-30: the
+  trend fit itself was fixed the next day — see
+  `2026-08-30-weekly-trend-fit.md` — and re-checking this same row now
+  shows -12.4%/z=-1.13 instead of +24%/z=1.0. Sign flipped, same
+  conclusion: still correctly reads FLAT, still the AND-gate doing its
+  job. The 284/16/100%/100% counts above are unchanged by that fix.)
 
 **Implication for `study`:** a project list weighted toward
 fast-shipping projects will yield mostly INSUFFICIENT (history-limited)
