@@ -28,6 +28,15 @@ This project doesn't have versioned releases yet — everything so far is
   that produces rows. Non-zero exit on collection failure.
 - `SPEC.md` (the living spec) and `notes/` (dated engineering log).
 
+- First real cross-project study: `study/projects.txt` (10 real public
+  projects, deliberately mixed release cadence) and `study/results.csv`
+  (787 rows), with a full writeup in `study/FINDINGS.md`. 95%
+  INSUFFICIENT (pypistats' ~180-day history ceiling), 84% confounded,
+  2 real SUSTAINED findings — one unconfounded and clean
+  (`pytest-dev/pytest` 9.0.3). Also surfaced a real gap: 2 of the 10
+  projects use only git tags, not GitHub Releases, so they contribute
+  zero events.
+
 ### Fixed (pre-release, caught by tests before shipping)
 
 - `compute_lift` originally compared events to the flat pre-window mean,

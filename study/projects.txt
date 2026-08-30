@@ -1,0 +1,18 @@
+# Real projects for hirogari's first cross-project study.
+# Format: owner/repo[,pypi_package]
+#
+# Deliberately mixes release cadence (see notes/2026-08-29-window-vs-history-length.md:
+# a fast-shipping project validated earlier came back ~95% INSUFFICIENT and 100%
+# confounded on its own -- a project list needs slower-cadence projects too, or
+# every result is either unclassifiable or unattributable).
+
+tiangolo/fastapi,fastapi
+pallets/click,click
+pallets/flask,flask
+psf/requests,requests
+pytest-dev/pytest,pytest
+python-pillow/Pillow,pillow
+sqlalchemy/sqlalchemy,sqlalchemy
+urllib3/urllib3,urllib3
+certifi/python-certifi,certifi
+pyca/cryptography,cryptography

@@ -4,7 +4,7 @@ Developer-tool companies acquire users through GitHub repos, docs pages, package
 
 広がり (hirogari) — spread, diffusion. How far something traveled, not how much of it there is.
 
-This is a methodology/credibility project, not a product — see [SPEC.md](SPEC.md) for what it is and isn't in scope for, and why it exists. **Pre-alpha.** The commands below work end-to-end against real public APIs; there's no published cross-project study yet.
+This is a methodology/credibility project, not a product — see [SPEC.md](SPEC.md) for what it is and isn't in scope for, and why it exists. **Pre-alpha**, but the pipeline runs end-to-end against real public APIs and has a first published cross-project study: [study/](study/) (787 real events across 8 projects, [findings here](study/FINDINGS.md)).
 
 ## Install
 
@@ -69,9 +69,32 @@ example/project
   events: 2 (1 docs, 1 release)
 ```
 
-## Real-world validation
+## Cross-project study
 
-Before trusting `study` on a project list, I ran `hirogari collect`/`hirogari lift` against a real, very-frequently-releasing PyPI package and GitHub repo (~300 releases since 2018, several per month). Target redacted per this repo's policy of not naming specific real projects or companies — see [SPEC.md](SPEC.md#why-this-exists).
+`study` is the point of the tool — one CSV row per (event, metric), across
+every project in a list, ready for cross-project analysis. First real run:
+10 real public PyPI/GitHub projects, chosen to mix release cadence on
+purpose (see why below) — [study/projects.txt](study/projects.txt) in,
+[study/results.csv](study/results.csv) out, 787 rows.
+
+Headline results: **95% of rows came back INSUFFICIENT** (pypistats' ~180
+-day history against years of release history — a hard ceiling), **84%
+of the rest were flagged `confounded`**, and out of 787 rows there were
+exactly **2 SUSTAINED findings** — one of them (`pytest-dev/pytest`
+9.0.3, unconfounded: +45.7% immediate, +133.6% sustained, `robust_z`
+3.06) is the one result in the whole run the methodology can actually
+stand behind as a clean, specific, defensible claim. Full breakdown,
+per-project table, and what this run does/doesn't support:
+[study/FINDINGS.md](study/FINDINGS.md).
+
+## Single-project deep dive (methodology demonstration)
+
+Before running the multi-project study above, I validated the methodology
+against a single real, very-frequently-releasing PyPI package and GitHub
+repo (~300 releases since 2018, several per month — this is the same
+`tiangolo/fastapi` project that appears by name in the study above, but
+this section predates the decision to name real projects in this repo, so
+it stays redacted as originally written).
 
 ```
 $ hirogari collect <redacted> --pypi <redacted>
@@ -113,7 +136,7 @@ Aggregate findings across all 300 releases:
 
 The 95% INSUFFICIENT rate is almost entirely pypistats' ~180-day download history against a release history going back to 2018 — a hard ceiling, not a tuning problem. More notably: of the releases that *were* evaluable, **100% were confounded** — this project ships often enough that nearly every release has another release inside its own analysis window, making clean single-release attribution close to structurally impossible at that cadence. Full writeup: [notes/2026-08-29-window-vs-history-length.md](notes/2026-08-29-window-vs-history-length.md).
 
-**What this means for `study`:** a project list weighted toward fast-shipping projects will produce mostly INSUFFICIENT and mostly `confounded` results, not a clean cross-project signal. A useful project list needs to mix in lower-cadence projects, and any eventual writeup needs to report the confounded-rate and history-exclusion-rate as diagnostics, not bury them.
+**What this predicted, and what actually happened:** a project list weighted toward fast-shipping projects would produce mostly INSUFFICIENT and mostly `confounded` results, not a clean cross-project signal — so the study above deliberately mixed in slower-cadence projects. It still came back 95% INSUFFICIENT and 84% confounded, which held the prediction, and found exactly 2 real SUSTAINED results in the other 5%.
 
 ## Methodology
 
