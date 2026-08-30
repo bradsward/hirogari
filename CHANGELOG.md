@@ -27,7 +27,6 @@ This project doesn't have versioned releases yet — everything so far is
   `study`, `list`. Table output by default; `--csv`/`--json` everywhere
   that produces rows. Non-zero exit on collection failure.
 - `SPEC.md` (the living spec) and `notes/` (dated engineering log).
-
 - First real cross-project study: `study/projects.txt` (10 real public
   projects, deliberately mixed release cadence) and `study/results.csv`
   (787 rows), with a full writeup in `study/FINDINGS.md`. 95%
@@ -36,6 +35,14 @@ This project doesn't have versioned releases yet — everything so far is
   (`pytest-dev/pytest` 9.0.3). Also surfaced a real gap: 2 of the 10
   projects use only git tags, not GitHub Releases, so they contribute
   zero events.
+- `github_releases.collect_releases` now falls back to tags when a
+  project has zero GitHub Releases (fixes the gap above), gated on
+  `GITHUB_TOKEN` being set — resolving each tag's date costs one extra
+  API request per tag with no bulk endpoint available, which a project
+  with 60+ tags would exhaust the unauthenticated 60/hr budget on by
+  itself. Verified against real API response shapes; not yet re-run live
+  end-to-end against certifi/cryptography since this environment has no
+  `GITHUB_TOKEN` available.
 
 ### Fixed (pre-release, caught by tests before shipping)
 

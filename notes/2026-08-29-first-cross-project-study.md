@@ -19,10 +19,22 @@ releases from `hirogari events`. Checked directly against the GitHub API
 tag versions without ever creating a GitHub Release object, so the
 releases endpoint genuinely returns an empty list for them. This is a
 real gap in the `release`-event source: it only sees adoption signal for
-projects that use GitHub's Releases feature. A tags-based fallback would
-close this but isn't built. Worth remembering before assuming a project
-that shows 0 events in `hirogari list` has no release history at all —
-it might just not use Releases.
+projects that use GitHub's Releases feature. Worth remembering before
+assuming a project that shows 0 events in `hirogari list` has no release
+history at all — it might just not use Releases.
+
+**Update (same day):** built the tags-based fallback. GitHub's REST API
+has no bulk "tag name + date" endpoint — the tags list gives a commit
+SHA per tag, and resolving each one to a date costs a separate
+`/commits/{sha}` request. certifi alone has 66 tags and cryptography has
+100+, so an unauthenticated run (60 req/hr total) would blow its entire
+budget resolving one project's tags before touching anything else. The
+fallback is gated on `GITHUB_TOKEN` being present for exactly this
+reason — same pattern as stars/traffic. Verified the tag-list and
+commit-detail JSON shapes directly against the live API (both match what
+the code expects) and covered the logic with fixture tests, but haven't
+re-run the actual `certifi`/`cryptography` fallback live end-to-end,
+since this environment has no `GITHUB_TOKEN` available.
 
 ## The study actually found real signal, not just null results
 

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "2026.07.22",
+    "commit": {
+      "sha": "aaa111",
+      "url": "https://api.github.com/repos/acme/widget/commits/aaa111"
+    }
+  },
+  {
+    "name": "2026.01.01",
+    "commit": {
+      "sha": "bbb222",
+      "url": "https://api.github.com/repos/acme/widget/commits/bbb222"
+    }
+  }
+]

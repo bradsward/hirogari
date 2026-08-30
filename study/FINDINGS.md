@@ -14,8 +14,16 @@ from GitHub's releases API — verified directly against the API, not a
 `hirogari` bug. Both projects tag versions without creating GitHub
 Release objects. This is a real blind spot in the `release`-event source:
 `hirogari events` only sees projects that use GitHub's Releases feature,
-not projects that only tag. A future source could fall back to git tags
-when releases are empty; not built yet.
+not projects that only tag.
+
+**Fixed same day, not yet re-run:** `collect_releases` now falls back to
+tags when releases are empty, gated on `GITHUB_TOKEN` (resolving each
+tag's date is a separate API request with no bulk endpoint — certifi's
+66 tags and cryptography's 100+ would exhaust an unauthenticated 60/hr
+budget by themselves). This run predates that fix and has no token
+available to re-run it live, so `results.csv` still reflects these two
+projects contributing zero events. See
+`notes/2026-08-29-first-cross-project-study.md` for the fix writeup.
 
 ## Aggregate, the other 8 projects (787 rows)
 

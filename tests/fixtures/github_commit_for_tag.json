@@ -1,0 +1,9 @@
+{
+  "sha": "aaa111",
+  "commit": {
+    "committer": {
+      "name": "Acme Bot",
+      "date": "2026-07-22T10:00:00Z"
+    }
+  }
+}
