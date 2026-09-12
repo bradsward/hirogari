@@ -32,18 +32,24 @@ bar," not "nobody ever discussed this project."
 
 ## A second, harder limit: found posts skew old
 
-Real events found (live, 2026-09-12):
+Real events found (live, 2026-09-12, 7 projects tested):
 
-- `psf/requests` — "Requests moved to Python Software Foundation" (2019)
+- `django/django` — 6 hits, 2012 through 2022 (its GitHub move, schema
+  migrations, terminology changes, dropping Python 2, a Redis backend,
+  a Black reformat)
 - `pypa/pip` — "Pipfile for Python" (2016), "If this project is dead,
   just tell us" (2019), "New Pip resolver takes a long time to complete"
   (2020)
+- `numpy/numpy` — 3 hits, 2017-2022 (dropping Python 2.7, twice, and a
+  1.24 release announcement)
+- `psf/requests` — "Requests moved to Python Software Foundation" (2019)
 - `tiangolo/fastapi` — "Too many emojis in 'Concurrency and async /
   await' explanation" (2022)
 - `pytest-dev/pytest`, `pallets/click` — none found (0, not an error)
 
-Every one of these predates pypistats' ~180-day download history by
-years. That's not a coincidence specific to these projects: an
+Every one of these 14 posts, across all 7 projects, predates pypistats'
+~180-day download history — several by close to a decade. That's not a
+coincidence specific to these projects: an
 established, well-known project's *notable* HN moments (launch,
 controversy, a widely-shared post) tend to cluster around when it was
 new or newsworthy, which for a mature project is long ago — while

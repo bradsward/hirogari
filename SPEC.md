@@ -115,7 +115,7 @@ interface.
    filtered to hits whose own submitted `url` contains that string
    (precision over recall — see `notes/2026-09-12-hn-posts-source.md`)
    and at least `MIN_POINTS_DEFAULT` (50) points. Turns into `post`
-   events. Live-verified against 5 real projects.
+   events. Live-verified against 7 real projects.
 
 Handle GitHub rate limits properly: read `X-RateLimit-Remaining` and
 `X-RateLimit-Reset`, and fail with a clear message rather than a stack

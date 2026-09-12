@@ -98,9 +98,11 @@ This project doesn't have versioned releases yet — everything so far is
   (default 50). Deliberately precision-over-recall — a post linking to a
   docs site or blog rather than the bare GitHub URL is invisible to it,
   by design, not oversight. Wired into `collect` and `study`.
-  Live-verified against 5 real projects (`pypa/pip`: 3 hits,
-  `psf/requests`/`tiangolo/fastapi`: 1 each, `pytest-dev/pytest`/
-  `pallets/click`: 0). See `notes/2026-09-12-hn-posts-source.md`.
+  Live-verified against 7 real projects (`django/django`: 6 hits,
+  `pypa/pip`/`numpy/numpy`: 3 each, `psf/requests`/`tiangolo/fastapi`:
+  1 each, `pytest-dev/pytest`/`pallets/click`: 0) — every hit found
+  predates pypistats' ~180-day window, some by a decade. See
+  `notes/2026-09-12-hn-posts-source.md`.
 
 ### Verified (live, for the first time)
 
