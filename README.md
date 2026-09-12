@@ -1,5 +1,10 @@
 # hirogari
 
+[![tests](https://github.com/bradsward/hirogari/actions/workflows/tests.yml/badge.svg)](https://github.com/bradsward/hirogari/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](pyproject.toml)
+
 Developer-tool companies acquire users through GitHub repos, docs pages, package registries, and forum posts — none of which shows up in normal marketing analytics, because the buyer is an engineer who never fills out a form. `hirogari` measures that path using only public data: which releases, docs changes, and posts actually moved adoption, and did the lift last.
 
 広がり (hirogari) — spread, diffusion. How far something traveled, not how much of it there is.
