@@ -13,7 +13,7 @@ from typing import Any
 
 from hirogari.analysis import diff_in_diff, lift
 from hirogari.output import emit
-from hirogari.sources import github_releases, github_stars, github_traffic, npm, pypi
+from hirogari.sources import github_releases, github_stars, github_traffic, hn, npm, pypi
 from hirogari.sources.base import SourceError
 from hirogari.store import DEFAULT_DB_PATH, Event, MetricPoint, Store
 
@@ -52,6 +52,9 @@ def cmd_collect(args: argparse.Namespace) -> int:
         store,
         f"{project}: github releases",
         partial(github_releases.collect_releases, project, token=token),
+    )
+    ok &= _attempt_events(
+        store, f"{project}: hacker news posts", partial(hn.collect_posts, project)
     )
     if token:
         ok &= _attempt_metrics(
@@ -238,6 +241,9 @@ def cmd_study(args: argparse.Namespace) -> int:
             f"{project}: github releases",
             partial(github_releases.collect_releases, project, token=token),
         )
+        ok &= _attempt_events(
+            store, f"{project}: hacker news posts", partial(hn.collect_posts, project)
+        )
         if token:
             ok &= _attempt_metrics(
                 store,
@@ -245,7 +251,10 @@ def cmd_study(args: argparse.Namespace) -> int:
                 partial(github_stars.collect_stars, project, token=token),
             )
         else:
-            print(f"{project}: github stars: skipped (GITHUB_TOKEN not set; GitHub requires auth)")
+            print(
+                f"{project}: github stars: skipped "
+                "(GITHUB_TOKEN not set; only works if you admin the repo anyway)"
+            )
         if pypi_package:
             ok &= _attempt_metrics(
                 store,

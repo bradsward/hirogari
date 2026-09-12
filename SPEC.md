@@ -104,6 +104,18 @@ interface.
    and `/traffic/clones`. Only 14 days of history, so collect
    incrementally and accumulate in the local DB. Read the token from the
    `GITHUB_TOKEN` env var. Degrade gracefully when it is absent.
+   **Also unverified beyond the error path**: even with a zero-scope
+   token, this 403s on a repo you own with "Must have push access" — a
+   token with actual `repo` scope is needed to prove that, untested here.
+6. **Hacker News posts** — **added during implementation**, not in the
+   original spec, to close a real gap: `hirogari` claims to measure
+   "posts" from its first README line, but nothing found them
+   automatically until this existed. `https://hn.algolia.com/api/v1/search`
+   (public, no auth), full-text search for `github.com/{owner}/{repo}`,
+   filtered to hits whose own submitted `url` contains that string
+   (precision over recall — see `notes/2026-09-12-hn-posts-source.md`)
+   and at least `MIN_POINTS_DEFAULT` (50) points. Turns into `post`
+   events. Live-verified against 5 real projects.
 
 Handle GitHub rate limits properly: read `X-RateLimit-Remaining` and
 `X-RateLimit-Reset`, and fail with a clear message rather than a stack

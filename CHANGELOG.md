@@ -90,6 +90,18 @@ This project doesn't have versioned releases yet — everything so far is
   identity but doesn't carry delegated repo permission, even for a repo
   you own. Docs now say this plainly instead of the unverified claim.
 
+- Hacker News posts source (`hirogari.sources.hn`, `hn.algolia.com`, no
+  auth): closes a real gap — "posts" has been in the README's first
+  sentence since day one, but nothing found them automatically until
+  now. Full-text search filtered to direct-link submissions (not just
+  any story that mentions the repo somewhere) with a points floor
+  (default 50). Deliberately precision-over-recall — a post linking to a
+  docs site or blog rather than the bare GitHub URL is invisible to it,
+  by design, not oversight. Wired into `collect` and `study`.
+  Live-verified against 5 real projects (`pypa/pip`: 3 hits,
+  `psf/requests`/`tiangolo/fastapi`: 1 each, `pytest-dev/pytest`/
+  `pallets/click`: 0). See `notes/2026-09-12-hn-posts-source.md`.
+
 ### Verified (live, for the first time)
 
 - npm downloads source (`hirogari.sources.npm`) had only ever been
