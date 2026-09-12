@@ -1,10 +1,12 @@
-# Real projects for hirogari's first cross-project study.
+# Real projects for hirogari's cross-project study.
 # Format: owner/repo[,pypi_package]
 #
 # Deliberately mixes release cadence (see notes/2026-08-29-window-vs-history-length.md:
 # a fast-shipping project validated earlier came back ~95% INSUFFICIENT and 100%
 # confounded on its own -- a project list needs slower-cadence projects too, or
-# every result is either unclassifiable or unattributable).
+# every result is either unclassifiable or unattributable) and domain (web
+# frameworks, data/scientific libraries, packaging tools, crypto/security,
+# general utilities) so the study isn't just "web framework adjacent."
 
 tiangolo/fastapi,fastapi
 pallets/click,click
@@ -16,3 +18,13 @@ sqlalchemy/sqlalchemy,sqlalchemy
 urllib3/urllib3,urllib3
 certifi/python-certifi,certifi
 pyca/cryptography,cryptography
+numpy/numpy,numpy
+pandas-dev/pandas,pandas
+django/django,django
+pypa/pip,pip
+python-attrs/attrs,attrs
+benoitc/gunicorn,gunicorn
+yaml/pyyaml,pyyaml
+pydantic/pydantic,pydantic
+encode/httpx,httpx
+benjaminp/six,six

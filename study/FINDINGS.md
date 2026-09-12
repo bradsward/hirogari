@@ -1,103 +1,115 @@
 # Cross-project study — real results
 
-Run against the 10 real projects in [projects.txt](projects.txt), using
-`hirogari study study/projects.txt --did --csv study/results.csv` with no
-`GITHUB_TOKEN` set (so GitHub stars/traffic were skipped for every
-project). Only `pypi.downloads` lift is in this run. `--did` nets every
+Run against the 20 real projects in [projects.txt](projects.txt), using
+`hirogari study study/projects.txt --did --csv study/results.csv` with a
+real `GITHUB_TOKEN` (raises the rate limit, and was expected to unlock
+GitHub stars — see below for why it didn't). `--did` nets every
 project's lift against every *other* studied project as a
-difference-in-differences control — see
-[SPEC.md](../SPEC.md#difference-in-differences) and
+difference-in-differences control, filtered to a similar traffic scale
+(`THRESHOLDS["max_control_baseline_ratio"]`) — see
+[SPEC.md](../SPEC.md#difference-in-differences). Full results:
+[results.csv](results.csv), 2,322 rows.
+
+**This file has been rewritten twice.** The first version (10 projects,
+no token, 787 rows) found "2 SUSTAINED, one clean." A trend-fit bug and
+then a real `--did` run revised that to "1 SUSTAINED, and it doesn't
+survive DiD either" — see the git history and
 [notes/2026-08-30-weekly-trend-fit.md](../notes/2026-08-30-weekly-trend-fit.md).
-Full results: [results.csv](results.csv), 787 rows.
+This version (20 projects, real token, 2,322 rows) has more data and a
+more interesting — and more honestly caveated — answer. Read this one.
 
-**This file was rewritten after two same-day fixes changed the numbers.**
-The first run found "2 SUSTAINED, one clean" — see the git history of
-this file for that version. A bug in the trend fit (contaminated by
-weekday/weekend noise) and, more importantly, actually applying the new
-`--did` feature to that "clean" result, changed the conclusion. The
-current numbers below are the corrected ones.
+## GitHub stars: still unavailable, for a stronger reason than last time
 
-## Two projects contributed zero events
+A real token was expected to unlock stars data. It didn't — GitHub
+restricts the stargazers listing endpoint to repo admins/collaborators
+as of July 2026 (confirmed against their own current docs), which no
+token fixes for a project you don't administer. This run only has
+`pypi.downloads`. See
+[notes/2026-09-12-github-stars-locked-down.md](../notes/2026-09-12-github-stars-locked-down.md).
 
-`certifi/python-certifi` and `pyca/cryptography` both returned 0 releases
-from GitHub's releases API — verified directly against the API, not a
-`hirogari` bug. Both tag versions without creating GitHub Release
-objects. `collect_releases` now has a tags-based fallback for this
-(gated on `GITHUB_TOKEN`, not available in this environment — see
-[notes/2026-08-29-first-cross-project-study.md](../notes/2026-08-29-first-cross-project-study.md)),
-so this run still shows zero events for both. Useful side effect: with
-no events of their own, both are *always* eligible `--did` controls for
-every other project's window in this study.
+The tags-based release fallback, on the other hand, *did* get its first
+live run today: `certifi/python-certifi` (66 tags) and
+`pyca/cryptography` (160 tags) both resolved real release history for
+the first time, exactly as designed.
 
-## Aggregate (787 rows)
+## Aggregate (2,322 rows, 20 projects)
 
 | classification | count | share |
 |---|---|---|
-| INSUFFICIENT | 750 | 95% |
-| FLAT | 36 | 5% |
-| SUSTAINED | 1 | 0.1% |
-| SPIKE | 0 | 0% |
+| INSUFFICIENT | 2,226 | 95.9% |
+| FLAT | 90 | 3.9% |
+| SUSTAINED | 5 | 0.2% |
+| SPIKE | 1 | 0.04% |
 
-84% of all 787 rows were flagged `confounded`. The INSUFFICIENT rate
-matches the earlier single-project validation run almost exactly (95%
-there too) — pypistats' ~180-day history ceiling dominates it regardless
-of which project it's run against.
+85% of all rows were flagged `confounded`. Both rates are consistent
+with every earlier run at any project-count — pypistats' ~180-day
+history ceiling and high release cadence dominate regardless of how many
+or which projects are in the pool. 96 rows (4%) had at least one
+DiD control that passed the scale-similarity filter and had sufficient,
+unconfounded data over that exact calendar window.
 
-37 rows had at least one usable `--did` control (enough of the rest of
-the study pool had clean, sufficient data over that specific calendar
-window). Every project ends up in this study as *both* a treatment (for
-its own events) and a potential control (for every other project's
-events) — the 8 with releases and the 2 without both contribute either
-way.
+## The 6 non-FLAT findings, and what DiD did to each
 
-## The one SUSTAINED result, and what DiD did to it
+| project | event | own immediate | own sustained | confounded | DiD immediate | DiD sustained |
+|---|---|---|---|---|---|---|
+| pytest-dev/pytest | 9.0.3 | +23.7% | +58.3% | no | +0.3% | +11.5% |
+| pyca/cryptography | 48.0.0 | +12.9% | +31.6% | **yes** | **-8.9%** | **-30.1%** |
+| pydantic/pydantic | v2.13.4 | +34.0% | +66.5% | yes | +9.4% | +4.2% |
+| pypa/pip | 26.1 | +26.7% | +19.7% | yes | +36.4% | +32.5% |
+| pypa/pip | **26.1.2** | +38.7% | +43.7% | **no** | **+20.6%** | +2.3% |
+| pypa/pip | 26.2 (SPIKE) | +43.9% | -3.2% | yes | +41.6% | +21.9% |
 
-**`pytest-dev/pytest` 9.0.3** (2026-04-07): not confounded, immediate
-lift 23.7%, sustained lift 58.3%, `robust_z` 2.21 — clears both
-thresholds on its own, which is why it's still classified SUSTAINED
-(`classification` is never recomputed from the DiD numbers; it's exactly
-what the project's own trend-adjusted reading says). Three other studied
-projects qualified as `--did` controls for this exact window — no event
-of their own, sufficient data: `certifi/python-certifi`, `pallets/flask`,
-`pyca/cryptography`.
+Three of six wash out to near-zero or reverse sign once checked against
+real control projects over the same calendar window — pytest, pydantic,
+and notably **cryptography flips negative**: its "SUSTAINED" reading
+undersold what comparable projects did over that same window, so once
+corrected it's actually a *relative underperformance*, not a lift.
 
-| | immediate | sustained |
-|---|---|---|
-| pytest's own lift | +23.7% | +58.3% |
-| control average, same calendar window | +21.3% | +51.5% |
-| **DiD-adjusted** | **+2.4%** | **+6.8%** |
+**`pypa/pip` is the standout, and it's genuinely interesting.** All
+three of its non-FLAT events retain a large DiD-adjusted immediate lift
+— including 26.1.2, the only one of the six that isn't confounded by a
+neighboring release. That's the single strongest result in this entire
+study: individually significant on its own (`robust_z` 2.30), not
+confounded, and still +20.6% after netting out eight real, similarly-
+scaled, no-event control projects over the identical window. Its
+sustained persistence does *not* hold up the same way (+2.3% DiD,
+against an own reading of +43.7% — the multi-week "SUSTAINED"
+classification was mostly shared with the ecosystem; only the immediate
+bump has real pip-specific signal).
 
-The three controls — a certs bundle, a web framework, and a crypto
-library, sharing nothing with pytest except being on PyPI — moved almost
-exactly as much as pytest did, over the identical calendar dates, with no
-release of their own. Whatever happened in that window, it wasn't
-specific to pytest 9.0.3. Once netted against what comparable projects
-did with no event of their own, there's effectively nothing left.
+**Caveat that matters here more than anywhere else in this project:**
+`pip` is the one package where the mechanical-install-traffic caveat
+(`notes/2026-08-29-trend-adjustment.md`) is closer to the whole story
+than a footnote. `pip install --upgrade pip` is a near-universal
+first line in CI configs, Docker images, and tutorials — run
+automatically, constantly, by tooling, with no human ever deciding
+"I should try this pip release." A new pip version very plausibly
+generates a real, immediate download spike through pure mechanical
+self-upgrade behavior, which is a completely different phenomenon from
+a developer reading a changelog and adopting something. This result is
+the most statistically defensible one in the study and simultaneously
+the one where "adoption" is the least appropriate word for what's being
+measured.
 
-**Net conclusion: zero of the 787 rows in this study represent a lift
-that is both individually significant *and* survives being checked
-against a real, no-event control over the same calendar window.** That's
-a materially different (and more defensible) headline than "found one
-clean result," and it's what actually happened when the stronger version
-of the methodology — the one flagged as future work when this project
-started — got built and pointed at the one finding that looked cleanest
-under the weaker version.
+## What this run does and doesn't support
 
-## What this does and doesn't support
+It supports: the full pipeline — collection (now including the live
+tags fallback), trend-adjusted lift, whole-week windowing, and
+scale-matched DiD — runs end-to-end against 20 real, structurally
+different public projects and produces a specific, checkable,
+individually-inspectable number for every event. It also supports the
+same structural point as the smaller run, with a bigger sample behind
+it: most single-project "clean" findings do not survive being checked
+against real no-event controls, and the ones that plausibly do (pip)
+come with their own, different attribution problem once you look closely
+at what actually drives that package's traffic.
 
-It supports: the full pipeline — collection, trend-adjusted lift,
-whole-week windowing, and now DiD — runs end-to-end against real, varied
-public projects and produces a specific, checkable number for every
-event, not a vague impression. It also supports a structural point: a
-single-project trend counterfactual is not enough on its own to call a
-result clean, even when it clears every threshold by a comfortable
-margin (z=2.21 is not marginal) — this run is a concrete, real example of
-exactly the failure mode difference-in-differences exists to catch,
-catching it.
-
-It does not support any claim like "releases cause N% average growth,"
-now more than ever — n=1 candidate finding out of 787 rows, and that one
-didn't survive its own control check. Release events also still carry
-the unremovable mechanical-install-traffic caveat from
-[notes/2026-08-29-trend-adjustment.md](../notes/2026-08-29-trend-adjustment.md)
-regardless of any of the above.
+It does not support any claim like "releases cause N% average growth" —
+if anything, the honest reading of this run is closer to "releases
+rarely produce a lift that's both statistically real and clearly
+attributable to that release specifically, and the one case that gets
+closest is confounded by mechanical CI traffic rather than human
+adoption." That is a materially different, and more defensible,
+conclusion than either of the two prior versions of this file reached —
+which is the point of running the check at increasing rigor rather than
+stopping at the first version that looked clean.

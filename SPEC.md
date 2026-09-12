@@ -80,12 +80,18 @@ interface.
    `https://api.github.com/repos/{owner}/{repo}/stargazers` with header
    `Accept: application/vnd.github.star+json` to get `starred_at`.
    Paginated, 100/page, capped at 40,000 by the API. Bucket into daily
-   counts. **Discovered during implementation** (verified live
-   2026-08-29, see `notes/2026-08-29-window-vs-history-length.md`):
-   GitHub now returns 401 for every unauthenticated request to this
-   endpoint, regardless of the star+json header — a `GITHUB_TOKEN` is
-   effectively required in practice, not just rate-limit-friendly. The
-   CLI skips this source with a clear message when the token is absent.
+   counts. **Discovered during implementation, in two stages**: first
+   (2026-08-29) that GitHub returns 401 for every unauthenticated
+   request; then (2026-09-12, confirmed against a real token and
+   GitHub's own current docs) that as of July 2026 this endpoint is
+   restricted to repo admins/collaborators, full stop — **no token
+   fixes this for a project you don't administer**. This is a
+   permanent, structural limit, not a missing-credential problem: the
+   source is kept because it still works for a repo you actually admin,
+   but it cannot be used for third-party cross-project analysis, which
+   was its purpose here. See `notes/2026-09-12-github-stars-locked-down.md`.
+   `pypi.downloads` (and `npm`, where relevant) are the only metrics
+   this tool can realistically use against external analysis targets.
 4. **npm downloads** (optional, for JS projects) —
    `https://api.npmjs.org/downloads/range/{start}:{end}/{package}`
 5. **GitHub traffic** (optional, requires a token with push access to the
@@ -193,7 +199,13 @@ diff_in_diff(store, project, metric, event_date, control_projects, ...)
 Runs `compute_lift` once for the treatment event and once per candidate
 control project, all anchored to the *same* `event_date` and window
 sizes. A control is only used if it has no event of its own inside its
-own window for that period and has enough data to be non-INSUFFICIENT.
+own window for that period, has enough data to be non-INSUFFICIENT, and
+(added after the first real study, see
+`notes/2026-09-12-github-stars-locked-down.md`'s sibling analysis in
+`study/FINDINGS.md`) is within
+`THRESHOLDS["max_control_baseline_ratio"]` of the treatment's own
+baseline scale — a tiny project's percentage swings can be huge on
+ordinary noise and would otherwise dominate the control average.
 `did_immediate_lift_pct`/`did_sustained_lift_pct` = the treatment's own
 lift minus the mean of the usable controls' lift over that identical
 calendar window. `classification` is never recomputed from the DiD
@@ -203,11 +215,14 @@ replacement verdict.
 
 CLI: `--did` on `hirogari lift` (controls = every other project in the
 local db sharing the metric) and `hirogari study` (controls = every
-other project in that study's list). Real result on the first run: the
-cross-project study's one SUSTAINED finding, which cleared both
-thresholds on its own, dropped to a negligible DiD-adjusted lift once
-checked against three real no-event controls over the same calendar
-window — see `study/FINDINGS.md`.
+other project in that study's list). Real results across two study runs
+(10 projects/787 rows, then 20 projects/2,322 rows with a real token):
+most individually-significant findings drop to near-zero or reverse sign
+once checked against real no-event controls over the same calendar
+window; the one that mostly survives (`pypa/pip`, three separate
+releases) turns out to be the package where mechanical CI self-upgrade
+traffic (`pip install --upgrade pip` in nearly every CI config) is the
+most plausible explanation, not human adoption — see `study/FINDINGS.md`.
 
 ## CLI
 

@@ -72,3 +72,9 @@ knowledge cutoff. `collect_stars` still accepts `token: str | None` for
 interface consistency with the other GitHub sources, but the CLI now
 checks for `GITHUB_TOKEN` and skips stars collection proactively (same
 pattern as traffic) instead of always hitting the same 401.
+
+**Superseded 2026-09-12:** got a real token and it still doesn't work —
+turns out this wasn't an auth-strength problem. See
+`notes/2026-09-12-github-stars-locked-down.md`: GitHub restricts this
+endpoint to repo admins/collaborators as of July 2026, permanently, for
+anyone else. No token fixes it for a third-party project.

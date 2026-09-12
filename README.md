@@ -9,7 +9,7 @@ Developer-tool companies acquire users through GitHub repos, docs pages, package
 
 広がり (hirogari) — spread, diffusion. How far something traveled, not how much of it there is.
 
-This is a methodology/credibility project, not a product — see [SPEC.md](SPEC.md) for what it is and isn't in scope for, and why it exists. **Pre-alpha**, but the pipeline runs end-to-end against real public APIs and has a first published cross-project study with difference-in-differences applied: [study/](study/) (787 real events across 10 projects, [findings here](study/FINDINGS.md)).
+This is a methodology/credibility project, not a product — see [SPEC.md](SPEC.md) for what it is and isn't in scope for, and why it exists. **Pre-alpha**, but the pipeline runs end-to-end against real public APIs and has a published cross-project study with difference-in-differences applied: [study/](study/) (2,322 real events across 20 projects, [findings here](study/FINDINGS.md)).
 
 ## Install
 
@@ -31,7 +31,7 @@ hirogari study <projects.txt> [--csv PATH]                 # run the pipeline ac
 hirogari list                                               # what's in the local db
 ```
 
-`--db PATH` (before the subcommand) points at a SQLite file other than `./hirogari.db`. `--csv`/`--json` work anywhere a command produces rows. `GITHUB_TOKEN` raises GitHub's rate limit from 60/hr to 5,000/hr and is required for the stars and traffic sources (see below).
+`--db PATH` (before the subcommand) points at a SQLite file other than `./hirogari.db`. `--csv`/`--json` work anywhere a command produces rows. `GITHUB_TOKEN` raises GitHub's rate limit from 60/hr to 5,000/hr, is required for the traffic source, and lets the release-events source fall back to tags for projects that don't use GitHub Releases. It does **not** unlock GitHub stars for other people's projects — see [Cross-project study](#cross-project-study) below.
 
 ## Real output
 
@@ -77,26 +77,32 @@ example/project
 ## Cross-project study
 
 `study` is the point of the tool — one CSV row per (event, metric), across
-every project in a list, ready for cross-project analysis, now with
+every project in a list, ready for cross-project analysis, with
 difference-in-differences applied (`--did`): every project's lift is also
-netted against every *other* studied project as a control, to catch a
-shared calendar-window effect masquerading as one project's result. First
-real run: 10 real public PyPI/GitHub projects, chosen to mix release
-cadence on purpose (see why below) — [study/projects.txt](study/projects.txt)
-in, [study/results.csv](study/results.csv) out, 787 rows.
+netted against every *other* studied project as a control (filtered to a
+similar traffic scale, so a tiny project's noisy percentage swings can't
+dominate the average), to catch a shared calendar-window effect
+masquerading as one project's result. Real run: 20 real public
+PyPI/GitHub projects, chosen to mix release cadence and domain on purpose
+(see why below) — [study/projects.txt](study/projects.txt) in,
+[study/results.csv](study/results.csv) out, 2,322 rows.
 
-Headline results: **95% of rows came back INSUFFICIENT** (pypistats' ~180
--day history against years of release history — a hard ceiling), **84%
-of the rest were flagged `confounded`**, and exactly **1 SUSTAINED
-finding** out of 787 rows (`pytest-dev/pytest` 9.0.3: unconfounded,
-+23.7% immediate, `robust_z` 2.21 — clears both thresholds on its own).
-Applying `--did` to it against three real no-event control projects that
-had data over the identical calendar window cuts it to **+2.4% immediate,
-+6.8% sustained** — the three controls moved almost as much as pytest
-did, with no release of their own. **Zero of the 787 rows in this study
-represent a lift that's both individually significant and survives being
-checked against a real control over the same window.** Full breakdown,
-the trend-fit bug this surfaced, and what this run does/doesn't support:
+Headline results: **95.9% INSUFFICIENT** (pypistats' ~180-day history
+against years of release history — a hard ceiling), **85% of the rest
+flagged `confounded`**, and **6 non-FLAT findings** out of 2,322 rows.
+Checking each against DiD: 3 wash out to near-zero or flip sign (one,
+`pyca/cryptography`, actually reverses — its "SUSTAINED" reading turns
+out to be an *underperformance* once compared to what similar projects
+did over that window). The other 3 all belong to **`pypa/pip`**, and its
+cleanest, unconfounded release (`26.1.2`: `robust_z` 2.30, +38.7% own
+immediate lift) still shows **+20.6% immediate lift after DiD** — the
+single most defensible positive result across the whole study. But pip
+is also the one package where `pip install --upgrade pip` runs
+automatically in nearly every CI pipeline with no human ever deciding to
+adopt anything — the result that survives the most rigorous check in
+this project is also the one where "adoption" is the least appropriate
+word for what's actually being measured. Full breakdown, the per-event
+table, and the trend-fit bug a real DiD run surfaced along the way:
 [study/FINDINGS.md](study/FINDINGS.md).
 
 ## Single-project deep dive (methodology demonstration)
@@ -149,15 +155,16 @@ Aggregate findings across all 300 releases:
 
 The 95% INSUFFICIENT rate is almost entirely pypistats' ~180-day download history against a release history going back to 2018 — a hard ceiling, not a tuning problem. More notably: of the releases that *were* evaluable, **100% were confounded** — this project ships often enough that nearly every release has another release inside its own analysis window, making clean single-release attribution close to structurally impossible at that cadence. Full writeup: [notes/2026-08-29-window-vs-history-length.md](notes/2026-08-29-window-vs-history-length.md).
 
-**What this predicted, and what actually happened:** a project list weighted toward fast-shipping projects would produce mostly INSUFFICIENT and mostly `confounded` results, not a clean cross-project signal — so the study above deliberately mixed in slower-cadence projects. It still came back 95% INSUFFICIENT and 84% confounded, which held the prediction, and found exactly 1 real SUSTAINED result in the other 5% — which `--did` then showed wasn't specific to that project either (see above).
+**What this predicted, and what actually happened:** a project list weighted toward fast-shipping projects would produce mostly INSUFFICIENT and mostly `confounded` results, not a clean cross-project signal — so the study above deliberately mixed in slower-cadence projects and different domains. It still came back 95.9% INSUFFICIENT and 85% confounded, which held the prediction, and the handful of real findings mostly didn't survive being checked against real controls — except one, for a reason that has more to do with CI automation than adoption (see above).
 
 ## Methodology
 
 Full detail in [SPEC.md](SPEC.md) and the dated notes in [notes/](notes/). Short version:
 
 - `hirogari lift` doesn't compare an event's aftermath to the flat historical average — it fits a trend on the pre-event baseline (on weekly-aggregated points, not raw days — see below) and extrapolates it forward as the counterfactual, then measures lift against *that*. A project growing organically at 5%/week will otherwise show "lift" after every single release, which is measuring growth, not attribution. [notes/2026-08-29-trend-adjustment.md](notes/2026-08-29-trend-adjustment.md) has the full account, including the tradeoffs this introduces (extrapolation confidence decays with distance from the fit window; a release's real effect partly leaks into the next release's baseline on fast-shipping projects).
-- `--did` (on `lift` and `study`) nets that trend-adjusted lift against every other project in the pool as a control — a shared calendar-window effect (not specific to any one project) shows up in both and cancels; a project-specific effect doesn't. Built after a real DiD run caught a real bug in the trend fit itself (raw-daily-point regression contaminated by weekday/weekend noise, fixed by fitting on weekly-aggregated points instead) and then, with that fixed, showed the cross-project study's one remaining "clean" finding wasn't actually project-specific — see [notes/2026-08-30-weekly-trend-fit.md](notes/2026-08-30-weekly-trend-fit.md) for the full, fairly striking, account.
-- Every `release` event carries a mechanical-install-traffic caveat (CI pins, Dependabot, mirror resyncs) that no amount of statistical adjustment removes — see the same trend-adjustment note.
+- `--did` (on `lift` and `study`) nets that trend-adjusted lift against every other project in the pool as a control, filtered to a similar traffic scale — a shared calendar-window effect (not specific to any one project) shows up in both and cancels; a project-specific effect doesn't. Built after a real DiD run caught a real bug in the trend fit itself (raw-daily-point regression contaminated by weekday/weekend noise, fixed by fitting on weekly-aggregated points instead) and then, with that fixed, showed most of the cross-project study's "clean" findings weren't actually project-specific — see [notes/2026-08-30-weekly-trend-fit.md](notes/2026-08-30-weekly-trend-fit.md) for the full, fairly striking, account.
+- Every `release` event carries a mechanical-install-traffic caveat (CI pins, Dependabot, mirror resyncs) that no amount of statistical adjustment removes — `pypa/pip` in the cross-project study is close to a worked example of exactly this. See the same trend-adjustment note.
+- GitHub stargazer history cannot be collected for third-party projects at all as of July 2026 (GitHub restricts it to repo admins/collaborators) — see [notes/2026-09-12-github-stars-locked-down.md](notes/2026-09-12-github-stars-locked-down.md). `pypi.downloads` is the only metric this tool can realistically use against external analysis targets today.
 
 ## Development
 

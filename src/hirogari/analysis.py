@@ -103,6 +103,19 @@ THRESHOLDS: dict[str, float] = {
     # for the effect to count as SUSTAINED rather than a decaying SPIKE.
     # 0.5 = "at least half of the bump held up six weeks out."
     "sustain_fraction": 0.50,
+    # A DiD control is excluded if its own baseline (over the treatment's
+    # exact calendar window) differs from the treatment's baseline by more
+    # than this multiple, in either direction. DiD averages controls'
+    # *percentage* lift, which is already scale-normalized in principle --
+    # but a tiny project's percentage swings are driven by a handful of
+    # human downloads and can legitimately swing 100%+ on ordinary noise,
+    # while a huge project's swings are damped by a large, steady,
+    # CI-driven floor. Averaging across wildly different scales risks
+    # letting one noisy small control's outlier percentage dominate the
+    # mean. 25x is generous (it won't exclude, say, a 6M/day project as a
+    # control for a 20M/day one) while still excluding a genuinely
+    # different order of magnitude.
+    "max_control_baseline_ratio": 25.0,
 }
 
 
@@ -284,6 +297,22 @@ def _z_score(deviation: float, mad: float) -> float | None:
     if mad == 0:
         return None
     return deviation / (_MAD_TO_STDEV * mad)
+
+
+def _similar_scale(treatment_baseline: float | None, control_baseline: float | None) -> bool:
+    """Is `control_baseline` within THRESHOLDS["max_control_baseline_ratio"]
+    of `treatment_baseline`? Used to keep a DiD control's percentage lift
+    from a wildly different order of magnitude out of the average (see
+    THRESHOLDS comment). Unknown or non-positive baselines pass through
+    (not excluded on scale grounds) -- that's not what this check is for;
+    a zero/None baseline is already handled by `zero_baseline` upstream.
+    """
+    if treatment_baseline is None or control_baseline is None:
+        return True
+    if treatment_baseline <= 0 or control_baseline <= 0:
+        return True
+    ratio = max(treatment_baseline, control_baseline) / min(treatment_baseline, control_baseline)
+    return ratio <= THRESHOLDS["max_control_baseline_ratio"]
 
 
 def _is_meaningful(
@@ -632,6 +661,9 @@ def compute_diff_in_diff(
         )
         is_insufficient = control_result.classification is Classification.INSUFFICIENT
         if is_insufficient or control_result.confounded:
+            skipped.append(project)
+            continue
+        if not _similar_scale(treatment.baseline, control_result.baseline):
             skipped.append(project)
             continue
         used.append(project)

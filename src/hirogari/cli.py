@@ -60,11 +60,14 @@ def cmd_collect(args: argparse.Namespace) -> int:
             partial(github_stars.collect_stars, project, token=token),
         )
     else:
-        # Verified live (2026-08-29): GitHub's stargazers endpoint now
-        # returns 401 for every unauthenticated request, regardless of
-        # the star+json Accept header -- not just a lower rate limit.
+        # Verified live: as of July 2026 GitHub restricts stargazer
+        # listings to repo admins/collaborators (see github_stars.py's
+        # docstring) -- a token only helps here if it's yours to admin.
         # Skip proactively instead of always failing with the same error.
-        print(f"{project}: github stars: skipped (GITHUB_TOKEN not set; GitHub requires auth)")
+        print(
+            f"{project}: github stars: skipped "
+            "(GITHUB_TOKEN not set; only works if you admin the repo anyway)"
+        )
     if args.pypi:
         ok &= _attempt_metrics(
             store, f"{project}: pypi downloads", partial(pypi.collect_downloads, project, args.pypi)

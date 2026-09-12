@@ -106,6 +106,29 @@ def test_control_with_its_own_event_in_window_is_skipped() -> None:
 
 
 # ---------------------------------------------------------------------------
+# A control at a wildly different scale is excluded, even if otherwise clean
+# ---------------------------------------------------------------------------
+
+
+def test_control_at_wildly_different_scale_is_skipped() -> None:
+    treatment = _flat_with_step(
+        EVENT, baseline=1_000_000.0, amplitude=3000.0, post_value=1_100_000.0
+    )
+    similar_scale = _flat_with_step(
+        EVENT, baseline=200_000.0, amplitude=600.0, post_value=200_000.0
+    )
+    # ~20,000x smaller than treatment -- well past max_control_baseline_ratio
+    tiny_control = _flat_with_step(EVENT, baseline=50.0, amplitude=1.5, post_value=50.0)
+
+    result = compute_diff_in_diff(
+        treatment, {"control/similar": similar_scale, "control/tiny": tiny_control}, EVENT
+    )
+
+    assert result.control_projects_used == ["control/similar"]
+    assert result.control_projects_skipped == ["control/tiny"]
+
+
+# ---------------------------------------------------------------------------
 # No usable controls -> DiD fields are None with an explanatory note, not a crash
 # ---------------------------------------------------------------------------
 

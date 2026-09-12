@@ -27,13 +27,22 @@ def collect_stars(project: str, *, token: str | None = None) -> list[MetricPoint
     The stargazers API caps at 40,000 entries; beyond that this
     undercounts (GitHub's limit, not hirogari's).
 
-    Verified live (2026-08-29): GitHub now returns 401 for every
-    unauthenticated request to this endpoint, not just a lower rate
-    limit -- `token` is optional in this signature (for interface
-    consistency with the other GitHub sources) but is effectively
-    required in practice. The CLI checks for `GITHUB_TOKEN` and skips
-    this source entirely when it's absent, rather than calling in and
-    always getting the same 401.
+    Two real, live-verified stages of this endpoint tightening, about two
+    weeks apart:
+
+    2026-08-29 — GitHub started returning 401 for every unauthenticated
+    request (not just a lower rate limit).
+
+    2026-09-12 — with a valid, authenticated token, it now 404s instead:
+    per GitHub's own docs (docs.github.com/rest/activity/starring),
+    "access to the stargazers listing endpoints [is] limited to admins
+    and collaborators" as of July 2026. That means **no token fixes
+    this for a project you don't administer** — it's not a rate-limit
+    or auth-strength problem, it's a permission wall. This source still
+    works for a repo you actually admin/collaborate on (e.g. hirogari's
+    own repo), which is why it's kept rather than removed, but it cannot
+    be used for third-party cross-project analysis, which was its whole
+    purpose here. See notes/2026-09-12-github-stars-locked-down.md.
     """
     if "/" not in project:
         raise SourceError(f"project must be 'owner/repo', got {project!r}")
@@ -41,7 +50,16 @@ def collect_stars(project: str, *, token: str | None = None) -> list[MetricPoint
     headers = github_headers(token)
     headers["Accept"] = _STAR_ACCEPT
     url = f"https://api.github.com/repos/{project}/stargazers?per_page=100"
-    rows = paginate_github(url, headers)
+    try:
+        rows = paginate_github(url, headers)
+    except SourceError as exc:
+        if "stargazers" in str(exc) and "404" in str(exc):
+            raise SourceError(
+                f"GitHub restricts stargazer listings to repo admins/collaborators as of "
+                f"July 2026 -- {project!r} can't be read this way regardless of token, "
+                "unless you administer that repo. See docs.github.com/rest/activity/starring."
+            ) from exc
+        raise
 
     daily: Counter[date] = Counter()
     for row in rows:

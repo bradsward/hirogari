@@ -18,9 +18,9 @@ This project doesn't have versioned releases yet — everything so far is
   protection); coverage is computed per whole week, not per raw day.
 - Data sources (`hirogari.sources`): PyPI downloads, npm downloads,
   GitHub releases (-> events), GitHub stargazers (-> daily new-star
-  counts, requires `GITHUB_TOKEN` in practice — GitHub now 401s
-  unauthenticated requests to this endpoint), GitHub traffic
-  (views/clones, requires `GITHUB_TOKEN`). GitHub rate-limit handling
+  counts — restricted by GitHub to repo admins/collaborators as of
+  July 2026, see Fixed below), GitHub traffic (views/clones, requires
+  `GITHUB_TOKEN`). GitHub rate-limit handling
   (`X-RateLimit-Remaining`/`-Reset`) with a clear error instead of a
   stack trace.
 - CLI (`hirogari`): `collect`, `events`, `event add`, `lift`, `report`,
@@ -37,19 +37,25 @@ This project doesn't have versioned releases yet — everything so far is
   `GITHUB_TOKEN` being set — resolving each tag's date costs one extra
   API request per tag with no bulk endpoint available, which a project
   with 60+ tags would exhaust the unauthenticated 60/hr budget on by
-  itself. Verified against real API response shapes; not yet re-run live
-  end-to-end against certifi/cryptography since this environment has no
-  `GITHUB_TOKEN` available.
+  itself. Live-verified 2026-09-12 with a real token: certifi (66 tags)
+  and cryptography (160 tags) both resolved correctly.
 - Difference-in-differences (`compute_diff_in_diff`/`diff_in_diff`,
   `--did` on `lift` and `study`): nets a treatment project's
   trend-adjusted lift against a set of control projects with no event of
   their own in the same calendar window, to catch a shared ecosystem
   -wide effect that a single-project trend fit can't see on its own.
-  Real result: applying it to the cross-project study's one SUSTAINED
-  finding (which cleared both thresholds on its own) dropped it to a
-  negligible DiD-adjusted lift once checked against three real
-  no-event controls over the same window — see `study/FINDINGS.md` and
-  `notes/2026-08-30-weekly-trend-fit.md`.
+  Controls are also filtered to a similar traffic scale
+  (`THRESHOLDS["max_control_baseline_ratio"]`) so one noisy small
+  project's percentage swings can't dominate the average.
+- Expanded the cross-project study from 10 to 20 real projects (mixing
+  domain as well as release cadence) and re-ran it with a real
+  `GITHUB_TOKEN`: 2,322 rows. Live-verified the tags-fallback for the
+  first time (certifi: 66 tags, cryptography: 160 tags, both resolved
+  correctly). Of 6 non-FLAT findings, 3 wash out under DiD (one,
+  `pyca/cryptography`, reverses sign entirely), and the 3 that don't are
+  all `pypa/pip` — whose surviving signal is more plausibly explained by
+  automatic `pip install --upgrade pip` CI traffic than human adoption.
+  See `study/FINDINGS.md`.
 
 ### Fixed (pre-release, caught before or via real use, not by users)
 
@@ -70,3 +76,10 @@ This project doesn't have versioned releases yet — everything so far is
   (`notes/2026-08-30-weekly-trend-fit.md`). `study/results.csv`
   regenerated; one of the two prior SUSTAINED findings flipped to FLAT
   under the corrected fit.
+- GitHub stargazers still doesn't work with a real token: as of July
+  2026 GitHub restricts the listing endpoint to repo admins/collaborators
+  (confirmed against their own current docs), not just "needs auth" as
+  the 2026-08-29 fix assumed. No token fixes this for a third-party
+  project. `collect_stars` now gives a clear message explaining this
+  instead of a generic 404; docs updated to stop implying `GITHUB_TOKEN`
+  unlocks it. See `notes/2026-09-12-github-stars-locked-down.md`.

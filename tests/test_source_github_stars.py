@@ -32,3 +32,25 @@ def test_collect_stars_empty_when_no_stargazers(monkeypatch: pytest.MonkeyPatch)
 def test_collect_stars_rejects_bad_project_format() -> None:
     with pytest.raises(SourceError):
         gh_stars.collect_stars("not-a-repo-id")
+
+
+def test_collect_stars_gives_clear_message_on_admin_only_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_404(url: str, headers: dict[str, str]) -> list[object]:
+        raise SourceError(f"GET {url} -> HTTP 404: Not Found")
+
+    monkeypatch.setattr(gh_stars, "paginate_github", raise_404)
+
+    with pytest.raises(SourceError, match="admins/collaborators"):
+        gh_stars.collect_stars("acme/widget", token="tok")
+
+
+def test_collect_stars_reraises_unrelated_source_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_other(url: str, headers: dict[str, str]) -> list[object]:
+        raise SourceError(f"GET {url} -> HTTP 500: Internal Server Error")
+
+    monkeypatch.setattr(gh_stars, "paginate_github", raise_other)
+
+    with pytest.raises(SourceError, match="500"):
+        gh_stars.collect_stars("acme/widget", token="tok")
