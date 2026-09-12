@@ -83,3 +83,16 @@ This project doesn't have versioned releases yet — everything so far is
   project. `collect_stars` now gives a clear message explaining this
   instead of a generic 404; docs updated to stop implying `GITHUB_TOKEN`
   unlocks it. See `notes/2026-09-12-github-stars-locked-down.md`.
+- Corrected a claim from earlier the same day: docs said stars/traffic
+  "still work for a repo you administer." Tested directly against
+  hirogari's own repo with a zero-scope token — both still fail (404 /
+  403 "Must have push access"). A zero-scope classic token proves
+  identity but doesn't carry delegated repo permission, even for a repo
+  you own. Docs now say this plainly instead of the unverified claim.
+
+### Verified (live, for the first time)
+
+- npm downloads source (`hirogari.sources.npm`) had only ever been
+  fixture-tested. Ran it for real against a real npm package
+  (`sindresorhus/chalk`, package `chalk`) alongside GitHub releases —
+  both worked correctly (33 releases, 365 days of download data).

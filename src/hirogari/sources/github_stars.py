@@ -33,16 +33,26 @@ def collect_stars(project: str, *, token: str | None = None) -> list[MetricPoint
     2026-08-29 — GitHub started returning 401 for every unauthenticated
     request (not just a lower rate limit).
 
-    2026-09-12 — with a valid, authenticated token, it now 404s instead:
-    per GitHub's own docs (docs.github.com/rest/activity/starring),
-    "access to the stargazers listing endpoints [is] limited to admins
-    and collaborators" as of July 2026. That means **no token fixes
-    this for a project you don't administer** — it's not a rate-limit
-    or auth-strength problem, it's a permission wall. This source still
-    works for a repo you actually admin/collaborate on (e.g. hirogari's
-    own repo), which is why it's kept rather than removed, but it cannot
-    be used for third-party cross-project analysis, which was its whole
-    purpose here. See notes/2026-09-12-github-stars-locked-down.md.
+    2026-09-12 — with a valid, authenticated (zero-scope classic) token,
+    it now 404s instead: per GitHub's own docs
+    (docs.github.com/rest/activity/starring), "access to the stargazers
+    listing endpoints [is] limited to admins and collaborators" as of
+    July 2026. That means **no token fixes this for a project you don't
+    administer** — it's not a rate-limit or auth-strength problem, it's
+    a permission wall.
+
+    Tested directly against hirogari's *own* repo with that same
+    zero-scope token: still 404. A zero-scope classic PAT proves you're
+    an authenticated user but doesn't itself carry delegated repo
+    permission, even for a repo you own — GitHub's traffic endpoint
+    (`github_traffic.py`) fails the same way with the same token,
+    explicitly citing "Must have push access to repository". A token
+    with actual `repo` scope would very likely fix this for your own
+    repos (that's what such scopes exist for), but that's inference from
+    the API's own error message, not something verified here — don't
+    repeat the earlier mistake of asserting this source "still works for
+    repos you admin" without having actually tried it with a scope that
+    could prove it. See notes/2026-09-12-github-stars-locked-down.md.
     """
     if "/" not in project:
         raise SourceError(f"project must be 'owner/repo', got {project!r}")

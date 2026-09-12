@@ -86,10 +86,15 @@ interface.
    GitHub's own current docs) that as of July 2026 this endpoint is
    restricted to repo admins/collaborators, full stop — **no token
    fixes this for a project you don't administer**. This is a
-   permanent, structural limit, not a missing-credential problem: the
-   source is kept because it still works for a repo you actually admin,
-   but it cannot be used for third-party cross-project analysis, which
-   was its purpose here. See `notes/2026-09-12-github-stars-locked-down.md`.
+   permanent, structural limit, not a missing-credential problem.
+   Tested directly against hirogari's own repo with a zero-scope
+   classic token: still 404 — such a token proves identity but doesn't
+   carry delegated repo permission even for a repo you own (the traffic
+   endpoint fails the same way, citing "Must have push access"). A
+   `repo`-scoped token would plausibly fix this for your own repos, but
+   that's inferred from the API's error message, not verified here.
+   Either way it cannot be used for third-party cross-project analysis,
+   which was its purpose here. See `notes/2026-09-12-github-stars-locked-down.md`.
    `pypi.downloads` (and `npm`, where relevant) are the only metrics
    this tool can realistically use against external analysis targets.
 4. **npm downloads** (optional, for JS projects) —
